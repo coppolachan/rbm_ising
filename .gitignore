@@ -5,7 +5,7 @@
 
 ##### Ignore generated data
 *.png
-
+*.data*
 
 ## Ignore ising data
 state*

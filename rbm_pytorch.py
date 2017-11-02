@@ -28,7 +28,6 @@ from torchvision.utils import make_grid, save_image
 
 #####################################################
 MNIST_SIZE = 784  # 28x28
-#ISING_SIZE = 1024
 #####################################################
 
 # Define a CSV reader dataset
@@ -188,7 +187,7 @@ elif args.model == 'ising':
     ### For the Ising Model data set
     model_size = args.ising_size*args.ising_size
     image_size = args.ising_size
-    train_loader = torch.utils.data.DataLoader(CSV_Ising_dataset("state0.data", size=args.ising_size), batch_size=args.batches)
+    train_loader = torch.utils.data.DataLoader(CSV_Ising_dataset("state0.data", size=args.ising_size), shuffle=True, batch_size=args.batches)
 
 
 # Read the model, example
@@ -200,7 +199,7 @@ if args.ckpoint is not None:
     rbm.load_state_dict(torch.load(args.ckpoint))
 
 
-train_op = optim.SGD(rbm.parameters(), lr=0.01, momentum=0.1, dampening=0, weight_decay=0.1)
+train_op = optim.SGD(rbm.parameters(), lr=0.1, momentum=0.1, dampening=0.0, weight_decay=0.0)
 
 
 # progress bar
@@ -223,11 +222,11 @@ for epoch in pbar:
         # loss function: see Fisher eq 28 (Training RBM: an Introduction)
         # the average on the training set of the gradients is
         # the sum of the derivative averaged over the training set minus the average on the model
-        loss = rbm.free_energy(data_input) - rbm.free_energy(new_visible)  # correct!
+        log_likelihood = rbm.free_energy(data_input)
+        loss = log_likelihood - rbm.free_energy(new_visible)  # correct!
         loss_.append(loss.data[0])
 
-        loss_file.write(str(i) + "\t" + str(epoch) +"\t" +  str(loss.data[0]) + "\n")
-        #print(i, loss.data[0])
+        loss_file.write(str(i) + "\t" + str(epoch) +"\t" +  str(loss.data[0]) + "\t" + str(log_likelihood.data[0]) + "\n")
         
         # Update gradients 
         train_op.zero_grad()
