@@ -58,12 +58,11 @@ def imgshow(file_name, img):
 
 
 class RBM(nn.Module):
-    def __init__(self,  n_vis=784,    n_hid=500,  k=5, learning_rate=0.01):
+    def __init__(self,  n_vis=784,    n_hid=500,  k=5):
         super(RBM, self).__init__()
         # definition of the constructor
         self.n_vis = n_vis
         self.n_hid = n_hid
-        self.learning_rate = learning_rate
 
         self.W = nn.Parameter(torch.randn(n_hid, n_vis) * 1e-2)
         self.v_bias = nn.Parameter(torch.zeros(n_vis))
@@ -175,7 +174,7 @@ if args.model == 'mnist':
                    transform=transforms.Compose([
                        transforms.ToTensor()
                    ])),
-        batch_size=args.batches)
+        batch_size=args.batches, shuffle=True)
 
     test_loader = torch.utils.data.DataLoader(
         datasets.MNIST('./DATA/MNIST_data', train=False, transform=transforms.Compose([
@@ -198,14 +197,23 @@ if args.ckpoint is not None:
     print("Loading saves network state from file", args.ckpoint)
     rbm.load_state_dict(torch.load(args.ckpoint))
 
+##############################
+# Training parameters
 
-train_op = optim.SGD(rbm.parameters(), lr=0.1, momentum=0.1, dampening=0.0, weight_decay=0.0)
+learning_rate = 0.1
+mom = 0.1  ## momentum
+damp = 0.0 # dampening factor
+wd = 0.0 # weigth decay
+
+
+train_op = optim.SGD(rbm.parameters(), lr= learning_rate, momentum= mom, dampening= damp, weight_decay= wd)
 
 
 # progress bar
 pbar = tqdm(range(args.epochs))
 
-loss_file = open("Loss_timeline.data", "w")
+loss_file = open("Loss_timeline.data_"+str(args.model)+"_lr"+str(learning_rate)+"_wd"+str(wd), "w")
+
 # Run the RBM training
 for epoch in pbar:
     loss_ = []
