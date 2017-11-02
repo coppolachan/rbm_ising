@@ -1,0 +1,14 @@
+/DATA
+.ipynb_checkpoints/
+.vscode/
+/Reference
+
+##### Ignore generated data
+*.png
+
+
+## Ignore ising data
+state*
+
+
+*~
