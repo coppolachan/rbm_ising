@@ -64,7 +64,7 @@ class RBM(nn.Module):
         self.n_vis = n_vis
         self.n_hid = n_hid
 
-        self.W = nn.Parameter(torch.randn(n_hid, n_vis) * 1e-2)
+        self.W = nn.Parameter(torch.randn(n_hid, n_vis) * 1e-3)
         self.v_bias = nn.Parameter(torch.zeros(n_vis))
         self.h_bias = nn.Parameter(torch.zeros(n_hid))
 
@@ -120,7 +120,7 @@ class RBM(nn.Module):
             #deltaV_bias = torch.mean(input - v_prob,0)*self.learning_rate
             #deltaH_bias = torch.mean(h_prob - hnew_prob,0)*self.learning_rate
 
-        return new_vis, hidden
+        return new_vis, hidden, h_prob, v_prob
 
     def loss(self, ref, test):
         # mseloss = torch.nn.MSELoss()# not ok, it will check for gradients
@@ -138,9 +138,30 @@ class RBM(nn.Module):
         vbias_term = v.mv(self.v_bias)  # = v*v_bias
         wx_b = F.linear(v, self.W, self.h_bias)  # = vW^T + h_bias
         hidden_term = wx_b.exp().add(1).log().sum(1)   # sum over the elements of the vector 
+        
+        ## most probably we are hitting some numerical instability here
+        # solution, create a new autograd function for the parameters update
+
         # notice that for batches of data the result is still a vector of size num_batches
         return (-hidden_term - vbias_term).mean()  # mean along the batches
 
+    def backward(self,target, v, h_prob):
+        #vbias_term = v.mv(self.v_bias)  # = v*v_bias
+        #pv = (F.linear(v, self.W, self.h_bias)).exp().add(1).prod(1)*vbias_term 
+        
+        probability = torch.sigmoid(F.linear(target, self.W, self.h_bias)) # p(H_i | v) where v is the input data
+        
+        # Update the W
+        training_set_avg = probability.t().mm(target)
+        self.W.grad = -(training_set_avg - h_prob.t().mm(v))/probability.size(0)
+
+        # Update the v_bias
+        #pv_v = v.t().mv(pv)
+        self.v_bias.grad = -(target - v).mean(0)
+
+        # Update the h_bias
+        #pv_hp = h_prob.t().mv(pv) # p(H_i | v) * v  where the probability is given v as a machine state
+        self.h_bias.grad = -(probability - h_prob).mean(0)
 
 ## Parse command line arguments
 parser = argparse.ArgumentParser(description='Process some integers.')
@@ -200,10 +221,10 @@ if args.ckpoint is not None:
 ##############################
 # Training parameters
 
-learning_rate = 0.1
-mom = 0.1  ## momentum
+learning_rate = 0.3
+mom = 0.0  ## momentum
 damp = 0.0 # dampening factor
-wd = 0.0 # weigth decay
+wd = 0.0 # weight decay
 
 
 train_op = optim.SGD(rbm.parameters(), lr= learning_rate, momentum= mom, dampening= damp, weight_decay= wd)
@@ -212,24 +233,25 @@ train_op = optim.SGD(rbm.parameters(), lr= learning_rate, momentum= mom, dampeni
 # progress bar
 pbar = tqdm(range(args.epochs))
 
-loss_file = open("Loss_timeline.data_"+str(args.model)+"_lr"+str(learning_rate)+"_wd"+str(wd), "w")
+loss_file = open("Loss_timeline.data_"+str(args.model)+"_lr"+str(learning_rate)+"_wd"+str(wd)+"_mom"+str(mom)+"_epochs"+str(args.epochs), "w")
 
 # Run the RBM training
 for epoch in pbar:
     loss_ = []
 
     for i, (data, target) in enumerate(train_loader):
-        data_var = Variable(data.view(-1, model_size))
+        data_input = Variable(data.view(-1, model_size))
         # how to randomize?
-        data_input = data_var.bernoulli()
+        #data_input = data_var.bernoulli()
         # print(data_input)
         # print(sample_data.size())
         # need a variable to define a tensor in PyTorch
-        new_visible, hidden = rbm(data_input)
+        new_visible, hidden, h_prob, v_prob = rbm(data_input)
         
         # loss function: see Fisher eq 28 (Training RBM: an Introduction)
         # the average on the training set of the gradients is
         # the sum of the derivative averaged over the training set minus the average on the model
+        # still having some instabilities here
         log_likelihood = rbm.free_energy(data_input)
         loss = log_likelihood - rbm.free_energy(new_visible)  # correct!
         loss_.append(loss.data[0])
@@ -238,7 +260,8 @@ for epoch in pbar:
         
         # Update gradients 
         train_op.zero_grad()
-        loss.backward()
+        #loss.backward()
+        rbm.backward(data_input,new_visible, h_prob)
         train_op.step()
     
     loss_mean = np.mean(loss_)
