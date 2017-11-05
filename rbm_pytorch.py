@@ -137,8 +137,10 @@ class RBM(nn.Module):
         # we can use the utilities of PyTorch to compute the gradients
         vbias_term = v.mv(self.v_bias)  # = v*v_bias
         wx_b = F.linear(v, self.W, self.h_bias)  # = vW^T + h_bias
+        #print(wx_b)
         hidden_term = wx_b.exp().add(1).log().sum(1)   # sum over the elements of the vector 
-        
+        #print(hidden_term)
+
         ## most probably we are hitting some numerical instability here
         # solution, create a new autograd function for the parameters update
 
@@ -242,10 +244,6 @@ for epoch in pbar:
     for i, (data, target) in enumerate(train_loader):
         data_input = Variable(data.view(-1, model_size))
         # how to randomize?
-        #data_input = data_var.bernoulli()
-        # print(data_input)
-        # print(sample_data.size())
-        # need a variable to define a tensor in PyTorch
         new_visible, hidden, h_prob, v_prob = rbm(data_input)
         
         # loss function: see Fisher eq 28 (Training RBM: an Introduction)
