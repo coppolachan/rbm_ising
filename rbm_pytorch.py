@@ -288,4 +288,3 @@ for epoch in pbar:
 # Save the model
 torch.save(rbm.state_dict(), "trained_rbm.pytorch")
 loss_file.close()
-
