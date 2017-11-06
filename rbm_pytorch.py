@@ -35,8 +35,8 @@ class CSV_Ising_dataset(Dataset):
     def __init__(self, csv_file, size=32, transform=None):
         self.csv_file = csv_file
         self.size = size
-        csvdata = np.loadtxt(csv_file,  delimiter=",", skiprows=1, dtype="float32")
-        self.imgs = torch.from_numpy(csvdata.reshape(-1,size*size))
+        csvdata = np.loadtxt(csv_file, delimiter=",", skiprows=1, dtype="float32")
+        self.imgs = torch.from_numpy(csvdata.reshape(-1, size * size))
         self.datasize, sizesq = self.imgs.shape
         self.transform = transform
         print("Loaded training set of %d states" % self.datasize)
@@ -53,12 +53,12 @@ def imgshow(file_name, img):
     f = "./%s.png" % file_name
     Wmin = img.min;
     Wmax = img.max;
-    #plt.imshow(npimg)
+    # plt.imshow(npimg)
     plt.imsave(f, npimg, vmin=Wmin, vmax=Wmax)
 
 
 class RBM(nn.Module):
-    def __init__(self,  n_vis=784,    n_hid=500,  k=5):
+    def __init__(self, n_vis=784, n_hid=500, k=5):
         super(RBM, self).__init__()
         # definition of the constructor
         self.n_vis = n_vis
@@ -97,7 +97,7 @@ class RBM(nn.Module):
     def new_state(self, visible):
         hidden, probhid = self.hidden_from_visible(visible)
         new_visible, probvis = self.visible_from_hidden(probhid)
-        #new_hidden, probhid_new = self.hidden_from_visible(probvis)
+        # new_hidden, probhid_new = self.hidden_from_visible(probvis)
 
         return hidden, probhid, new_visible, probvis
 
@@ -116,9 +116,9 @@ class RBM(nn.Module):
             hidden, h_prob, new_vis, v_prob = self.new_state(new_vis)
 
             # update parameters (not necessary if the use the loss function and autograd)
-            #deltaW = self.learning_rate*(torch.mm(input.t(), hidden ) - torch.mm(v_prob.t(), hnew_prob))
-            #deltaV_bias = torch.mean(input - v_prob,0)*self.learning_rate
-            #deltaH_bias = torch.mean(h_prob - hnew_prob,0)*self.learning_rate
+            # deltaW = self.learning_rate*(torch.mm(input.t(), hidden ) - torch.mm(v_prob.t(), hnew_prob))
+            # deltaV_bias = torch.mean(input - v_prob,0)*self.learning_rate
+            # deltaH_bias = torch.mean(h_prob - hnew_prob,0)*self.learning_rate
 
         return new_vis, hidden, h_prob, v_prob
 
@@ -137,9 +137,9 @@ class RBM(nn.Module):
         # we can use the utilities of PyTorch to compute the gradients
         vbias_term = v.mv(self.v_bias)  # = v*v_bias
         wx_b = F.linear(v, self.W, self.h_bias)  # = vW^T + h_bias
-        #print(wx_b)
-        hidden_term = wx_b.exp().add(1).log().sum(1)   # sum over the elements of the vector 
-        #print(hidden_term)
+        # print(wx_b)
+        hidden_term = wx_b.exp().add(1).log().sum(1)  # sum over the elements of the vector
+        # print(hidden_term)
 
         ## most probably we are hitting some numerical instability here
         # solution, create a new autograd function for the parameters update
@@ -147,46 +147,52 @@ class RBM(nn.Module):
         # notice that for batches of data the result is still a vector of size num_batches
         return (-hidden_term - vbias_term).mean()  # mean along the batches
 
-    def backward(self,target, v, h_prob):
-        #vbias_term = v.mv(self.v_bias)  # = v*v_bias
-        #pv = (F.linear(v, self.W, self.h_bias)).exp().add(1).prod(1)*vbias_term 
-        
-        probability = torch.sigmoid(F.linear(target, self.W, self.h_bias)) # p(H_i | v) where v is the input data
-        
+    def backward(self, target, v, h_prob):
+        # vbias_term = v.mv(self.v_bias)  # = v*v_bias
+        # pv = (F.linear(v, self.W, self.h_bias)).exp().add(1).prod(1)*vbias_term
+
+        probability = torch.sigmoid(F.linear(target, self.W, self.h_bias))  # p(H_i | v) where v is the input data
+
         # Update the W
         training_set_avg = probability.t().mm(target)
-        self.W.grad = -(training_set_avg - h_prob.t().mm(v))/probability.size(0)
+        self.W.grad = -(training_set_avg - h_prob.t().mm(v)) / probability.size(0)
 
         # Update the v_bias
-        #pv_v = v.t().mv(pv)
+        # pv_v = v.t().mv(pv)
         self.v_bias.grad = -(target - v).mean(0)
 
         # Update the h_bias
-        #pv_hp = h_prob.t().mv(pv) # p(H_i | v) * v  where the probability is given v as a machine state
+        # pv_hp = h_prob.t().mv(pv) # p(H_i | v) * v  where the probability is given v as a machine state
         self.h_bias.grad = -(probability - h_prob).mean(0)
+
 
 ## Parse command line arguments
 parser = argparse.ArgumentParser(description='Process some integers.')
-parser.add_argument('--model', dest='model', default='mnist', help='choose the model', 
-                    type=str, choices=['mnist','ising'])
-parser.add_argument('--ckpoint', dest='ckpoint', help='pass a saved state', 
+parser.add_argument('--model', dest='model', default='mnist', help='choose the model',
+                    type=str, choices=['mnist', 'ising'])
+parser.add_argument('--ckpoint', dest='ckpoint', help='pass a saved state',
                     type=str)
-parser.add_argument('--epochs', dest='epochs',default=10, help='number of epochs', 
+parser.add_argument('--epochs', dest='epochs', default=10, help='number of epochs',
                     type=int)
-parser.add_argument('--batch', dest='batches',default=128, help='batch size', 
+parser.add_argument('--batch', dest='batches', default=128, help='batch size',
                     type=int)
-parser.add_argument('--hidden', dest='hidden_size',default=500, help='hidden feature size', 
+parser.add_argument('--hidden', dest='hidden_size', default=500, help='hidden feature size',
                     type=int)
-parser.add_argument('--ising_size', dest='ising_size',default=32, help='lattice size for this Ising 2D model', 
+parser.add_argument('--ising_size', dest='ising_size', default=32, help='lattice size for this Ising 2D model',
                     type=int)
-parser.add_argument('--k', dest='kCD',default=2, help='number of Contrastive Divergence steps', 
+parser.add_argument('--k', dest='kCD', default=2, help='number of Contrastive Divergence steps',
                     type=int)
+parser.add_argument('--imgout', dest='image_output_dir', default='./', help='directory in which to save output images',
+                    type=str)
+parser.add_argument('--train', dest='training_data', default='state0.data', help='path to training input data',
+                    type=str)
+parser.add_argument('--txtout', dest='text_output_dir', default='./', help='directory in which to save text output data',
+                    type=str)
 
 args = parser.parse_args()
 print(args)
 print("Using library:", torch.__file__)
 hidden_layers = args.hidden_size * args.hidden_size
-
 
 #### For the MNIST data set
 if args.model == 'mnist':
@@ -194,29 +200,29 @@ if args.model == 'mnist':
     image_size = 28
     train_loader = torch.utils.data.DataLoader(
         datasets.MNIST('./DATA/MNIST_data', train=True, download=True,
-                   transform=transforms.Compose([
-                       transforms.ToTensor()
-                   ])),
+                       transform=transforms.Compose([
+                           transforms.ToTensor()
+                       ])),
         batch_size=args.batches, shuffle=True)
 
     test_loader = torch.utils.data.DataLoader(
         datasets.MNIST('./DATA/MNIST_data', train=False, transform=transforms.Compose([
-        transforms.ToTensor()
+            transforms.ToTensor()
         ])),
         batch_size=args.batches)
 #############################
 elif args.model == 'ising':
     ### For the Ising Model data set
-    model_size = args.ising_size*args.ising_size
+    model_size = args.ising_size * args.ising_size
     image_size = args.ising_size
-    train_loader = torch.utils.data.DataLoader(CSV_Ising_dataset("state0.data", size=args.ising_size), shuffle=True, batch_size=args.batches)
-
+    train_loader = torch.utils.data.DataLoader(CSV_Ising_dataset(args.training_data, size=args.ising_size), shuffle=True,
+                                               batch_size=args.batches)
 
 # Read the model, example
 rbm = RBM(k=args.kCD, n_vis=model_size, n_hid=hidden_layers)
 
 # load the model, if the file is present
-if args.ckpoint is not None: 
+if args.ckpoint is not None:
     print("Loading saves network state from file", args.ckpoint)
     rbm.load_state_dict(torch.load(args.ckpoint))
 
@@ -225,17 +231,16 @@ if args.ckpoint is not None:
 
 learning_rate = 0.3
 mom = 0.0  ## momentum
-damp = 0.0 # dampening factor
-wd = 0.0 # weight decay
+damp = 0.0  # dampening factor
+wd = 0.0  # weight decay
 
-
-train_op = optim.SGD(rbm.parameters(), lr= learning_rate, momentum= mom, dampening= damp, weight_decay= wd)
-
+train_op = optim.SGD(rbm.parameters(), lr=learning_rate, momentum=mom, dampening=damp, weight_decay=wd)
 
 # progress bar
 pbar = tqdm(range(args.epochs))
 
-loss_file = open("Loss_timeline.data_"+str(args.model)+"_lr"+str(learning_rate)+"_wd"+str(wd)+"_mom"+str(mom)+"_epochs"+str(args.epochs), "w")
+loss_file = open(args.text_output_dir + "Loss_timeline.data_" + str(args.model) + "_lr" + str(learning_rate) + "_wd" + str(wd) + "_mom" + str(
+    mom) + "_epochs" + str(args.epochs), "w")
 
 # Run the RBM training
 for epoch in pbar:
@@ -245,7 +250,7 @@ for epoch in pbar:
         data_input = Variable(data.view(-1, model_size))
         # how to randomize?
         new_visible, hidden, h_prob, v_prob = rbm(data_input)
-        
+
         # loss function: see Fisher eq 28 (Training RBM: an Introduction)
         # the average on the training set of the gradients is
         # the sum of the derivative averaged over the training set minus the average on the model
@@ -254,28 +259,33 @@ for epoch in pbar:
         loss = log_likelihood - rbm.free_energy(new_visible)  # correct!
         loss_.append(loss.data[0])
 
-        loss_file.write(str(i) + "\t" + str(epoch) +"\t" +  str(loss.data[0]) + "\t" + str(log_likelihood.data[0]) + "\n")
-        
-        # Update gradients 
+        loss_file.write(
+            str(i) + "\t" + str(epoch) + "\t" + str(epoch*(args.batches-1)+i) + "\t" + str(loss.data[0]) + "\t" + str(log_likelihood.data[0]) + "\n")
+
+        # Update gradients
         train_op.zero_grad()
-        #loss.backward()
-        rbm.backward(data_input,new_visible, h_prob)
+        # loss.backward()
+        rbm.backward(data_input, new_visible, h_prob)
         train_op.step()
-    
+
     loss_mean = np.mean(loss_)
     pbar.set_description("Epoch %3d - Loss %8.5f " % (epoch, loss_mean))
 
-
     # confirm output
-    imgshow("real"+`epoch`, make_grid(data_input.view(-1, 1, image_size, image_size).data))
-    imgshow("generate"+`epoch`, make_grid(new_visible.view(-1, 1, image_size, image_size).data))
-    imgshow("parameter"+`epoch`, make_grid(rbm.W.view(hidden_layers, 1, image_size, image_size).data))
-    
-    np.savetxt("W.data"+`epoch`,rbm.W.data.numpy()) 
-    # .data is used to retrieve the tensor held by the Parameter(Variable) W, then we can get the numpy representation   
-    
-    imgshow("hidden"+`epoch`, make_grid(hidden.view(-1, 1, args.hidden_size, args.hidden_size).data))
+    imgshow(args.image_output_dir + "real" + repr(epoch),
+            make_grid(data_input.view(-1, 1, image_size, image_size).data))
+    imgshow(args.image_output_dir + "generate" + repr(epoch),
+            make_grid(new_visible.view(-1, 1, image_size, image_size).data))
+    imgshow(args.image_output_dir + "parameter" + repr(epoch),
+            make_grid(rbm.W.view(hidden_layers, 1, image_size, image_size).data))
+
+    np.savetxt(args.text_output_dir + "W.data" + repr(epoch), rbm.W.data.numpy())
+    # .data is used to retrieve the tensor held by the Parameter(Variable) W, then we can get the numpy representation
+
+    imgshow(args.image_output_dir + "hidden" + repr(epoch),
+            make_grid(hidden.view(-1, 1, args.hidden_size, args.hidden_size).data))
 
 # Save the model
 torch.save(rbm.state_dict(), "trained_rbm.pytorch")
 loss_file.close()
+
