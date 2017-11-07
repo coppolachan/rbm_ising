@@ -16,7 +16,7 @@ from tqdm import *
 import argparse
 import torch
 import torch.utils.data
-import torchvision
+#import torchvision
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -35,8 +35,27 @@ class CSV_Ising_dataset(Dataset):
     def __init__(self, csv_file, size=32, transform=None):
         self.csv_file = csv_file
         self.size = size
-        csvdata = np.loadtxt(csv_file, delimiter=",", skiprows=1, dtype="float32")
+        csvdata = np.loadtxt(csv_file, delimiter=",",
+                             skiprows=1, dtype="float32")
         self.imgs = torch.from_numpy(csvdata.reshape(-1, size * size))
+        self.datasize, sizesq = self.imgs.shape
+        self.transform = transform
+        print("Loaded training set of %d states" % self.datasize)
+
+    def __getitem__(self, index):
+        return self.imgs[index], index
+
+    def __len__(self):
+        return len(self.imgs)
+
+# Define a reader for npz files
+class Numpy_Ising_dataset(Dataset):
+    def __init__(self, npy_file, size=32, transform=None):
+        self.npy_file = npy_file
+        self.size = size
+        isingdata = np.load(npy_file)
+        print(np.asarray(isingdata))
+        self.imgs = torch.from_numpy(isingdata.reshape(-1, size * size))
         self.datasize, sizesq = self.imgs.shape
         self.transform = transform
         print("Loaded training set of %d states" % self.datasize)
@@ -51,8 +70,8 @@ class CSV_Ising_dataset(Dataset):
 def imgshow(file_name, img):
     npimg = np.transpose(img.numpy(), (1, 2, 0))
     f = "./%s.png" % file_name
-    Wmin = img.min;
-    Wmax = img.max;
+    Wmin = img.min
+    Wmax = img.max
     # plt.imshow(npimg)
     plt.imsave(f, npimg, vmin=Wmin, vmax=Wmax)
 
@@ -64,7 +83,7 @@ class RBM(nn.Module):
         self.n_vis = n_vis
         self.n_hid = n_hid
 
-        self.W = nn.Parameter(torch.randn(n_hid, n_vis) * 1e-3)
+        self.W = nn.Parameter(torch.randn(n_hid, n_vis) * 1e-2)
         self.v_bias = nn.Parameter(torch.zeros(n_vis))
         self.h_bias = nn.Parameter(torch.zeros(n_hid))
 
@@ -86,9 +105,9 @@ class RBM(nn.Module):
         new_states = self.sample_probability(probability, random_field)
         return new_states, probability
 
-    def visible_from_hidden(self, hidden):
+    def visible_from_hidden(self, hid):
         # Enable or disable neurons depending on probabilities
-        probability = torch.sigmoid(F.linear(hidden, self.W.t(), self.v_bias))
+        probability = torch.sigmoid(F.linear(hid, self.W.t(), self.v_bias))
         random_field = Variable(torch.rand(probability.size()))
         new_states = self.sample_probability(probability, random_field)
 
@@ -115,11 +134,6 @@ class RBM(nn.Module):
         for _ in range(self.CDiter):
             hidden, h_prob, new_vis, v_prob = self.new_state(new_vis)
 
-            # update parameters (not necessary if the use the loss function and autograd)
-            # deltaW = self.learning_rate*(torch.mm(input.t(), hidden ) - torch.mm(v_prob.t(), hnew_prob))
-            # deltaV_bias = torch.mean(input - v_prob,0)*self.learning_rate
-            # deltaH_bias = torch.mean(h_prob - hnew_prob,0)*self.learning_rate
-
         return new_vis, hidden, h_prob, v_prob
 
     def loss(self, ref, test):
@@ -130,19 +144,10 @@ class RBM(nn.Module):
     def free_energy(self, v):
         # computes -log( p(v) )
         # eq 2.20 Asja
-        # this is the term that will drive the loss
-        # and the backpropagation
-        # parameters are updated from the gradient
-        # of this term
-        # we can use the utilities of PyTorch to compute the gradients
-        vbias_term = v.mv(self.v_bias)  # = v*v_bias
-        wx_b = F.linear(v, self.W, self.h_bias)  # = vW^T + h_bias
-        # print(wx_b)
+        # double precision
+        vbias_term = v.mv(self.v_bias).double()  # = v*v_bias
+        wx_b = F.linear(v, self.W, self.h_bias).double()  # = vW^T + h_bias
         hidden_term = wx_b.exp().add(1).log().sum(1)  # sum over the elements of the vector
-        # print(hidden_term)
-
-        ## most probably we are hitting some numerical instability here
-        # solution, create a new autograd function for the parameters update
 
         # notice that for batches of data the result is still a vector of size num_batches
         return (-hidden_term - vbias_term).mean()  # mean along the batches
@@ -151,11 +156,13 @@ class RBM(nn.Module):
         # vbias_term = v.mv(self.v_bias)  # = v*v_bias
         # pv = (F.linear(v, self.W, self.h_bias)).exp().add(1).prod(1)*vbias_term
 
-        probability = torch.sigmoid(F.linear(target, self.W, self.h_bias))  # p(H_i | v) where v is the input data
+        # p(H_i | v) where v is the input data
+        probability = torch.sigmoid(F.linear(target, self.W, self.h_bias))
 
         # Update the W
         training_set_avg = probability.t().mm(target)
-        self.W.grad = -(training_set_avg - h_prob.t().mm(v)) / probability.size(0)
+        self.W.grad = -(training_set_avg - h_prob.t().mm(v)) / \
+            probability.size(0)
 
         # Update the v_bias
         # pv_v = v.t().mv(pv)
@@ -166,7 +173,7 @@ class RBM(nn.Module):
         self.h_bias.grad = -(probability - h_prob).mean(0)
 
 
-## Parse command line arguments
+# Parse command line arguments
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--model', dest='model', default='mnist', help='choose the model',
                     type=str, choices=['mnist', 'ising'])
@@ -194,7 +201,7 @@ print(args)
 print("Using library:", torch.__file__)
 hidden_layers = args.hidden_size * args.hidden_size
 
-#### For the MNIST data set
+# For the MNIST data set
 if args.model == 'mnist':
     model_size = MNIST_SIZE
     image_size = 28
@@ -212,7 +219,7 @@ if args.model == 'mnist':
         batch_size=args.batches)
 #############################
 elif args.model == 'ising':
-    ### For the Ising Model data set
+    # For the Ising Model data set
     model_size = args.ising_size * args.ising_size
     image_size = args.ising_size
     train_loader = torch.utils.data.DataLoader(CSV_Ising_dataset(args.training_data, size=args.ising_size), shuffle=True,
@@ -229,12 +236,13 @@ if args.ckpoint is not None:
 ##############################
 # Training parameters
 
-learning_rate = 0.3
-mom = 0.0  ## momentum
+learning_rate = 0.1
+mom = 0.9  # momentum
 damp = 0.0  # dampening factor
 wd = 0.0  # weight decay
 
-train_op = optim.SGD(rbm.parameters(), lr=learning_rate, momentum=mom, dampening=damp, weight_decay=wd)
+train_op = optim.SGD(rbm.parameters(), lr=learning_rate,
+                     momentum=mom, dampening=damp, weight_decay=wd)
 
 # progress bar
 pbar = tqdm(range(args.epochs))
@@ -260,7 +268,7 @@ for epoch in pbar:
         loss_.append(loss.data[0])
 
         loss_file.write(
-            str(i) + "\t" + str(epoch) + "\t" + str(epoch*(args.batches-1)+i) + "\t" + str(loss.data[0]) + "\t" + str(log_likelihood.data[0]) + "\n")
+            str(i) + "\t" + str(epoch) + "\t" + str(epoch * (args.batches - 1) + i) + "\t" + str(loss.data[0]) + "\t" + str(log_likelihood.data[0]) + "\n")
 
         # Update gradients
         train_op.zero_grad()
@@ -272,18 +280,19 @@ for epoch in pbar:
     pbar.set_description("Epoch %3d - Loss %8.5f " % (epoch, loss_mean))
 
     # confirm output
-    imgshow(args.image_output_dir + "real" + repr(epoch),
+    imgshow(args.image_output_dir + "real" + str(epoch),
             make_grid(data_input.view(-1, 1, image_size, image_size).data))
-    imgshow(args.image_output_dir + "generate" + repr(epoch),
+    imgshow(args.image_output_dir + "generate" + str(epoch),
             make_grid(new_visible.view(-1, 1, image_size, image_size).data))
-    imgshow(args.image_output_dir + "parameter" + repr(epoch),
+    imgshow(args.image_output_dir + "parameter" + str(epoch),
             make_grid(rbm.W.view(hidden_layers, 1, image_size, image_size).data))
+    imgshow(args.image_output_dir + "hidden" + str(epoch),
+            make_grid(hidden.view(-1, 1, args.hidden_size, args.hidden_size).data))
 
-    np.savetxt(args.text_output_dir + "W.data" + repr(epoch), rbm.W.data.numpy())
+    np.savetxt(args.text_output_dir + "W.data" +
+               str(epoch), rbm.W.data.numpy())
     # .data is used to retrieve the tensor held by the Parameter(Variable) W, then we can get the numpy representation
 
-    imgshow(args.image_output_dir + "hidden" + repr(epoch),
-            make_grid(hidden.view(-1, 1, args.hidden_size, args.hidden_size).data))
 
 # Save the model
 torch.save(rbm.state_dict(), "trained_rbm.pytorch")
