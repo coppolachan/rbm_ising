@@ -268,7 +268,7 @@ for epoch in pbar:
         loss_.append(loss.data[0])
 
         loss_file.write(
-            str(i) + "\t" + str(epoch) + "\t" + str(epoch * (args.batches - 1) + i) + "\t" + str(loss.data[0]) + "\t" + str(log_likelihood.data[0]) + "\n")
+            str(i) + "\t" + str(epoch) + "\t" + str(epoch) + "\t" + str(loss.data[0]) + "\t" + str(log_likelihood.data[0]) + "\n")
 
         # Update gradients
         train_op.zero_grad()
