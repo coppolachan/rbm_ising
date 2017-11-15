@@ -3,6 +3,9 @@
 .vscode/
 /Reference
 
+## Compiler Python bytecodes
+*.pyc
+
 ##### Ignore generated data
 *.png
 *.data*
