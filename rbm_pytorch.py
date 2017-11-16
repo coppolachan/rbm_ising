@@ -122,11 +122,14 @@ class RBM(nn.Module):
         well as arbitrary operators on Variables.
 
         """
-        hidden, h_prob, new_vis, v_prob = self.new_state(input)
+        #hidden, h_prob, new_vis, v_prob = self.new_state(input)
 
         # Contrastive divergence
+        new_vis = input
+        
         for _ in range(self.CDiter):
-            hidden, h_prob, new_vis, v_prob = self.new_state(new_vis)
+            hidden, h_prob, vis, v_prob = self.new_state(new_vis)
+            new_vis = vis
 
         return new_vis, hidden, h_prob, v_prob
 
@@ -155,9 +158,14 @@ class RBM(nn.Module):
         # p(H_i | v) where v is the input data
         probability = torch.sigmoid(F.linear(target, self.W, self.h_bias))
 
+        # p(H_i | v) where v is the negative visible layer
+        h_prob_negative = torch.sigmoid(F.linear(v, self.W, self.h_bias))
         # Update the W
         training_set_avg = probability.t().mm(target)
-        self.W.grad = -(training_set_avg - h_prob.t().mm(v)) / probability.size(0)
+        # The minus sign comes from the implementation of the SGD in pytorch 
+        # see http://www.cs.toronto.edu/~hinton/absps/momentum.pdf
+        # the learning rate has a negative sign in front
+        self.W.grad = -(training_set_avg - h_prob_negative.t().mm(v)) / probability.size(0)
 
         # Update the v_bias
         # pv_v = v.t().mv(pv)
@@ -165,7 +173,7 @@ class RBM(nn.Module):
 
         # Update the h_bias
         # pv_hp = h_prob.t().mv(pv) # p(H_i | v) * v  where the probability is given v as a machine state
-        self.h_bias.grad = -(probability - h_prob).mean(0)
+        self.h_bias.grad = -(probability - h_prob_negative).mean(0)
 
     def sample_from_rbm(self, steps, nstates, temperature = 0.0, decay = 0.0):
         """ Samples from the RBM distribution function 

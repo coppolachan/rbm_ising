@@ -39,9 +39,10 @@ MNIST_SIZE = 784  # 28x28
 def imgshow(file_name, img):
     npimg = np.transpose(img.numpy(), (1, 2, 0))
     f = "./%s.png" % file_name
-    Wmin = img.min
-    Wmax = img.max
-    plt.imsave(f, npimg, vmin=Wmin, vmax=Wmax)
+    ##Wmin = img.min
+    ##Wmax = img.max
+    ##plt.imsave(f, npimg, vmin=Wmin, vmax=Wmax)
+    plt.imsave(f, npimg)
 
 
 # Parse command line arguments
@@ -76,12 +77,11 @@ hidden_layers = args.hidden_size * args.hidden_size
 if args.model == 'mnist':
     model_size = MNIST_SIZE
     image_size = 28
-    train_loader = torch.utils.data.DataLoader(
-        datasets.MNIST('./DATA/MNIST_data', train=True, download=True,
+    dataset = datasets.MNIST('./DATA/MNIST_data', train=True, download=True,
                        transform=transforms.Compose([
                            transforms.ToTensor()
-                       ])),
-        batch_size=args.batches, shuffle=True)
+                       ]))
+    train_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batches, shuffle=True, drop_last=True)
 
     test_loader = torch.utils.data.DataLoader(
         datasets.MNIST('./DATA/MNIST_data', train=False, transform=transforms.Compose([
@@ -107,10 +107,10 @@ if args.ckpoint is not None:
 ##############################
 # Training parameters
 
-learning_rate = 0.15   # Mnist 0.3
+learning_rate = 0.01   # Mnist 0.3
 mom = 0.0  # momentum
 damp = 0.0  # dampening factor
-wd = 0.0001  # weight decay  ## 2.27 0.0002    Mnist 0.0001
+wd = 0.0  # weight decay  ## 2.27 0.0002    Mnist 0.0001
 
 train_op = optim.SGD(rbm.parameters(), lr=learning_rate,
                      momentum=mom, dampening=damp, weight_decay=wd)
@@ -124,6 +124,7 @@ loss_file = open(args.text_output_dir + "Loss_timeline.data_" + str(args.model) 
 # Run the RBM training
 for epoch in pbar:
     loss_ = []
+    full_reconstruction_error = []
 
     for i, (data, target) in enumerate(train_loader):
         data_input = Variable(data.view(-1, model_size))
@@ -139,7 +140,8 @@ for epoch in pbar:
         loss = data_free_energy - rbm.free_energy(new_visible)
         loss_.append(loss.data[0])
 
-        reconstruction_error = rbm.loss(data_input, new_visible)
+        reconstruction_error = rbm.loss(data_input, v_prob)
+        full_reconstruction_error.append(reconstruction_error.data[0])
         loss_file.write(str(i) + "\t" + str(epoch) + "\t" + str(loss.data[0]) + "\t" + str(
             data_free_energy.data[0]) + "\t" + str(reconstruction_error.data[0]) + "\n")
 
@@ -149,28 +151,30 @@ for epoch in pbar:
         rbm.backward(data_input, new_visible, h_prob)
         train_op.step()
 
+       
+    re_mean = np.mean(full_reconstruction_error)
     loss_mean = np.mean(loss_)
-    pbar.set_description("Epoch %3d - Loss %8.5f " % (epoch, loss_mean))
-
-    dream = rbm.sample_from_rbm(10000, 10, temperature=0.0, decay=0.00)
-    imgshow(args.image_output_dir + "dream" + str(epoch),
-            make_grid(dream.view(-1, 1, image_size, image_size).data))
+    pbar.set_description("Epoch %3d - Loss %8.5f - RE %5.3g " % (epoch, loss_mean, re_mean))
 
     # confirm output
-    imgshow(args.image_output_dir + "real" + str(epoch),
-            make_grid(data_input.view(-1, 1, image_size, image_size).data))
-    imgshow(args.image_output_dir + "generate" + str(epoch),
-            make_grid(new_visible.view(-1, 1, image_size, image_size).data))
+    #imgshow(args.image_output_dir + "real" + str(epoch),
+    #        make_grid(data_input.view(-1, 1, image_size, image_size).data))
+    #imgshow(args.image_output_dir + "generate" + str(epoch),
+    #        make_grid(new_visible.view(-1, 1, image_size, image_size).data))
+
+    # Normalize the 
     imgshow(args.image_output_dir + "parameter" + str(epoch),
             make_grid(rbm.W.view(hidden_layers, 1, image_size, image_size).data))
-    imgshow(args.image_output_dir + "hidden" + str(epoch),
-            make_grid(hidden.view(-1, 1, args.hidden_size, args.hidden_size).data))
+    #imgshow(args.image_output_dir + "hidden" + str(epoch),
+    #        make_grid(hidden.view(-1, 1, args.hidden_size, args.hidden_size).data))
 
-    np.savetxt(args.text_output_dir + "W.data" +
-               str(epoch), rbm.W.data.numpy())
+    #np.savetxt(args.text_output_dir + "W.data" +
+    #           str(epoch), rbm.W.data.numpy())
     # .data is used to retrieve the tensor held by the Parameter(Variable) W, then we can get the numpy representation
 
+    if epoch % 10  == 0 :
+        torch.save(rbm.state_dict(), "trained_rbm.pytorch."+str(epoch))
 
 # Save the model
-torch.save(rbm.state_dict(), "trained_rbm.pytorch")
+torch.save(rbm.state_dict(), "trained_rbm.pytorch.last")
 loss_file.close()
