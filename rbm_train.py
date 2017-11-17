@@ -94,7 +94,7 @@ elif args.model == 'ising':
     model_size = args.ising_size * args.ising_size
     image_size = args.ising_size
     train_loader = torch.utils.data.DataLoader(rbm_pytorch.CSV_Ising_dataset(args.training_data, size=args.ising_size), shuffle=True,
-                                               batch_size=args.batches)
+                                               batch_size=args.batches, drop_last=True)
 
 # Read the model, example
 rbm = rbm_pytorch.RBM(k=args.kCD, n_vis=model_size, n_hid=hidden_layers)
@@ -140,7 +140,7 @@ for epoch in pbar:
         loss = data_free_energy - rbm.free_energy(new_visible)
         loss_.append(loss.data[0])
 
-        reconstruction_error = rbm.loss(data_input, v_prob)
+        reconstruction_error = rbm.loss(data_input, new_visible)
         full_reconstruction_error.append(reconstruction_error.data[0])
         loss_file.write(str(i) + "\t" + str(epoch) + "\t" + str(loss.data[0]) + "\t" + str(
             data_free_energy.data[0]) + "\t" + str(reconstruction_error.data[0]) + "\n")
