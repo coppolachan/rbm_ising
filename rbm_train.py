@@ -123,8 +123,8 @@ train_op = optim.SGD(rbm.parameters(), lr=learning_rate,
 pbar = tqdm(range(args.start_epoch, args.epochs))
 
 loss_file = open(args.text_output_dir + "Loss_timeline.data_" + str(args.model) + "_lr" + str(learning_rate) + "_wd" + str(wd) + "_mom" + str(
-    mom) + "_epochs" + str(args.epochs), "w")
-
+    mom) + "_epochs" + str(args.epochs), "w", buffering=1)
+loss_file.write("#Epoch \t  Loss mean \t free energy mean \t reconstruction error mean \n")
 # Run the RBM training
 for epoch in pbar:
     loss_ = []
@@ -157,10 +157,9 @@ for epoch in pbar:
     re_mean = np.mean(full_reconstruction_error)
     loss_mean = np.mean(loss_)
     free_energy_mean = np.mean(free_energy_)
-    pbar.set_description("Epoch %3d - Loss %8.5f - RE %5.3g " %
-                         (epoch, loss_mean, re_mean))
+    pbar.set_description("Epoch %3d - Loss %8.5f - RE %5.3g " % (epoch, loss_mean, re_mean))
 
-    loss_file.write(str(epoch) + "\t" + str(loss.mean[0]) + "\t" +  str(free_energy_mean) + "\t" + str(re_mean) + "\n")
+    loss_file.write(str(epoch) + "\t" + str(loss_mean) + "\t" +  str(free_energy_mean) + "\t" + str(re_mean) + "\n")
     # confirm output
     #imgshow(args.image_output_dir + "real" + str(epoch),     make_grid(data_input.view(-1, 1, image_size, image_size).data))
     #imgshow(args.image_output_dir + "generate" + str(epoch), make_grid(new_visible.view(-1, 1, image_size, image_size).data))
