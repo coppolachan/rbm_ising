@@ -97,7 +97,7 @@ elif args.model == 'ising':
     # For the Ising Model data set
     model_size = args.ising_size * args.ising_size
     image_size = args.ising_size
-    train_loader = torch.utils.data.DataLoader(rbm_pytorch.CSV_Ising_dataset(args.training_data, size=args.ising_size), shuffle=True,
+    train_loader = torch.utils.data.DataLoader(rbm_pytorch.CSV_Ising_dataset(args.training_data, size=model_size), shuffle=True,
                                                batch_size=args.batches, drop_last=True)
 
 # Read the model, example
