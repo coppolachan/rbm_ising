@@ -160,8 +160,7 @@ for epoch in pbar:
     pbar.set_description("Epoch %3d - Loss %8.5f - RE %5.3g " %
                          (epoch, loss_mean, re_mean))
 
-    loss_file.write(str(epoch) + "\t" + str(loss.mean) + "\t" +
-                    str(free_energy_mean) + "\t" + str(re_mean) + "\n")
+    loss_file.write(str(epoch) + "\t" + str(loss.mean[0]) + "\t" +  str(free_energy_mean) + "\t" + str(re_mean) + "\n")
     # confirm output
     #imgshow(args.image_output_dir + "real" + str(epoch),     make_grid(data_input.view(-1, 1, image_size, image_size).data))
     #imgshow(args.image_output_dir + "generate" + str(epoch), make_grid(new_visible.view(-1, 1, image_size, image_size).data))
