@@ -41,6 +41,35 @@ MNIST_SIZE = 784  # 28x28
 #####################################################
 
 
+def get_ising_variables(field, sign=-1):
+    """ Get the Ising variables {-1,1} representation
+    of the RBM Markov fields
+
+    :param field: the RBM state (visible or hidden), numpy
+
+    :param sign: sign of the conversion 
+
+    :return: the Ising field
+
+    """
+    sign_field = np.full(field.shape, sign)
+
+    return (2.0 * field + sign_field).astype(int)
+
+
+def ising_magnetization(field):
+    m = np.abs((field).mean())
+    return np.array([m, m * m])
+
+def ising_averages(mag_history, model_size, label=""):
+    mag_avg = mag_history.mean(axis=0,keepdims=True) # average of m and m^2
+    mag_std = mag_history.std(axis=0,keepdims=True) # std error of m and m^2
+    susceptibility = model_size*(mag_avg[0,1] - mag_avg[0,0]*mag_avg[0,0])
+    print(label, " ::: Magnetization: ", mag_avg[0,0], " +- ", mag_std[0,0], " - Susceptibility:", susceptibility)
+    plt.plot(mag_history[:,0], linewidth=0.2)
+    plt.show()
+
+
 def imgshow(file_name, img):
     npimg = np.transpose(img.numpy(), (1, 2, 0))
     f = "./%s.png" % file_name
@@ -102,12 +131,21 @@ def sample_from_rbm(steps, model, image_size, nstates=30, v_in=None):
         # Initialize with zeroes
         v = torch.zeros(nstates, model.v_bias.data.shape[0])
         # Random initial visible state
-        #v = F.relu(torch.sign(torch.rand(nstates,v_bias.shape[0])-0.5)).data
+        #v = F.relu(torch.sign(torch.rand(nstates,model.v_bias.data.shape[0])-0.5)).data
 
     v_prob = v
-
+    
+    magv = []
+    magh = []
     # Run the Gibbs sampling for a number of steps
     for s in xrange(steps):
+        #r = np.random.random()
+        #if (r > 0.5):
+        #    vin = torch.zeros(nstates, model.v_bias.data.shape[0])
+        #    vin = torch.ones(nstates, model.v_bias.data.shape[0])
+        #else:
+
+
         if (s % parameters['save interval'] == 0):
             if parameters['output_states']:
                 imgshow(parameters['image_dir'] + "dream" + str(s),
@@ -118,10 +156,18 @@ def sample_from_rbm(steps, model, image_size, nstates=30, v_in=None):
             if args.verbose:
                 print(s, "OK")
 
-        # Update
+        # Update k steps
+        #for _ in xrange(200):
         h, h_prob = hidden_from_visible(v, model.W.data, model.h_bias.data)
         v, v_prob = visible_from_hidden(h, model.W.data, model.v_bias.data)
-    return v
+        #vin = v
+        
+        
+            # Save data
+        if (s > parameters['thermalization']):
+            magv.append(ising_magnetization(get_ising_variables(v.numpy())))
+            magh.append(ising_magnetization(get_ising_variables(h.numpy())))
+    return v, np.asarray(magv), np.asarray(magh)
 
 
 # Parse command line arguments
@@ -167,6 +213,14 @@ elif parameters['model'] == 'ising':
         train_loader = rbm_pytorch.CSV_Ising_dataset(
             parameters['ising']['train_data'], size=image_size)
 
+        # Compute magnetization and susceptibility
+        train_mag = []
+        for i in xrange(len(train_loader)):
+            data = train_loader[i][0].view(-1, model_size)
+            train_mag.append(ising_magnetization(get_ising_variables(data.numpy())))
+        tr_magarray= np.asarray(train_mag)
+        ising_averages(tr_magarray, model_size, "training_set")
+
 # Read the model, example
 rbm = rbm_pytorch.RBM(n_vis=model_size, n_hid=hidden_layers)
 
@@ -187,9 +241,17 @@ if parameters['initialize_with_training']:
     data = torch.zeros(parameters['concurrent samples'], model_size)
     for i in xrange(parameters['concurrent samples']):
         data[i] = train_loader[i + 100][0].view(-1, model_size)
-    sample_from_rbm(parameters['steps'], rbm, image_size, data)
+    v, magv, magh = sample_from_rbm(parameters['steps'], rbm, image_size, v_in=data)
 else:
-    sample_from_rbm(parameters['steps'], rbm, image_size, parameters['concurrent samples'])
+    v, magv, magh = sample_from_rbm(
+        parameters['steps'], rbm, image_size, parameters['concurrent samples'])
+
+
+ising_averages(magv, model_size, "v")
+ising_averages(magh, model_size, "h")
+
+
+
 
 
 """
