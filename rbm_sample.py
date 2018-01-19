@@ -35,10 +35,33 @@ import json
 from pprint import pprint
 
 import rbm_pytorch
+import pandas as pd
 
 #####################################################
 MNIST_SIZE = 784  # 28x28
 #####################################################
+
+def bootstrap_resample(X, n=None):
+    """ Bootstrap resample an array_like
+    Parameters
+    ----------
+    X : array_like
+      data to resample
+    n : int, optional
+      length of resampled array, equal to len(X) if n==None
+    Results
+    -------
+    returns X_resamples
+    """
+    if isinstance(X, pd.Series):
+        X = X.copy()
+        X.index = range(len(X.index))
+    if n == None:
+        n = len(X)
+        
+    resample_i = np.floor(np.random.rand(n)*len(X)).astype(int)
+    X_resample = np.array(X[resample_i])  
+    return X_resample
 
 
 def get_ising_variables(field, sign=-1):
@@ -62,12 +85,22 @@ def ising_magnetization(field):
     return np.array([m, m * m])
 
 def ising_averages(mag_history, model_size, label=""):
-    mag_avg = mag_history.mean(axis=0,keepdims=True) # average of m and m^2
-    mag_std = mag_history.std(axis=0,keepdims=True) # std error of m and m^2
-    susceptibility = model_size*(mag_avg[0,1] - mag_avg[0,0]*mag_avg[0,0])
-    print(label, " ::: Magnetization: ", mag_avg[0,0], " +- ", mag_std[0,0], " - Susceptibility:", susceptibility)
-    plt.plot(mag_history[:,0], linewidth=0.2)
-    plt.show()
+    # Bootstrap samples
+    resample_size = 50000
+    mag_resample = bootstrap_resample(mag_history[:,0], n=resample_size)
+    #print('original mean:', mag_history[:,0].mean() )
+    #print('resampled mean:', mag_resample.mean() )
+    #print('resampled error:', mag_resample.std()/sqrt(resample_size) )
+
+    mag_err = model_size*((mag_history[:,0]-mag_history[:,0].mean())**2)
+    susc_resample = bootstrap_resample(mag_err, n=resample_size)
+    #print('original susc mean:', mag_err.mean() )
+    #print('resampled susc mean:', susc_resample.mean() )
+    #print('resampled susc error:', susc_resample.std()/sqrt(resample_size) )
+
+    print(label, " ::: Magnetization: ", mag_resample.mean(), " +- ", mag_resample.std()/sqrt(resample_size), " - Susceptibility:", susc_resample.mean() , " +- ", susc_resample.std()/sqrt(resample_size))
+    #plt.plot(mag_history[:,0], linewidth=0.2)
+    #plt.show()
 
 
 def imgshow(file_name, img):
@@ -211,7 +244,7 @@ elif parameters['model'] == 'ising':
     if parameters['initialize_with_training']:
         print("Loading Ising training set...")
         train_loader = rbm_pytorch.CSV_Ising_dataset(
-            parameters['ising']['train_data'], size=image_size)
+            parameters['ising']['train_data'], size=model_size)
 
         # Compute magnetization and susceptibility
         train_mag = []
@@ -247,9 +280,15 @@ else:
         parameters['steps'], rbm, image_size, parameters['concurrent samples'])
 
 
+# Print statistics
 ising_averages(magv, model_size, "v")
 ising_averages(magh, model_size, "h")
 
+logz, logz_up, logz_down = rbm.annealed_importance_sampling(k=1, betas = 10000, num_chains = 200)
+print("LogZ ", logz, logz_up, logz_down)
+
+# Save data
+np.savetxt("Mag_history", magv)
 
 
 

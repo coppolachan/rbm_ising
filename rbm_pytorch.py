@@ -31,6 +31,51 @@ from torchvision import datasets, transforms
 from torchvision.utils import make_grid, save_image
 from math import exp
 
+# From PyDeep
+def log_sum_exp(x, axis=0):
+    """ Calculates the logarithm of the sum of e to the power of input 'x'. The method tries to avoid \
+        overflows by using the relationship: log(sum(exp(x))) = alpha + log(sum(exp(x-alpha))).
+
+    :param x: data.
+    :type x: float or numpy array
+
+    :param axis: Sums along the given axis.
+    :type axis: int
+
+    :return: Logarithm of the sum of exp of x.
+    :rtype: float or numpy array.
+    """
+    alpha = x.max(axis) - np.log(np.finfo(np.float64).max) / 2.0
+    if axis == 1:
+        return np.squeeze(alpha + np.log(np.sum(np.exp(x.T - alpha), axis=0)))
+    else:
+        return np.squeeze(alpha + np.log(np.sum(np.exp(x - alpha), axis=0)))
+
+
+def log_diff_exp(x, axis=0):
+    """ Calculates the logarithm of the diffs of e to the power of input 'x'. The method tries to avoid \
+        overflows by using the relationship: log(diff(exp(x))) = alpha + log(diff(exp(x-alpha))).
+
+    :param x: data.
+    :type x: float or numpy array
+
+    :param axis: Diffs along the given axis.
+    :type axis: int
+
+    :return: Logarithm of the diff of exp of x.
+    :rtype: float or numpy array.
+    """
+    alpha = x.max(axis) - np.log(np.finfo(np.float64).max) / 2.0
+    print("alpha", alpha)
+    if axis == 1:
+        return np.squeeze(alpha + np.log(np.diff(np.exp(x.T - alpha), n=1, axis=0)))
+    else:
+        print("x", x)
+        print("exp:", np.exp(x - alpha))
+        print("diff:", np.diff(np.exp(x - alpha)))
+        return np.squeeze(alpha + np.log(np.diff(np.exp(x - alpha), n=1, axis=0)))
+
+
 
 class CSV_Ising_dataset(Dataset):
     """ Defines a CSV reader """
@@ -72,27 +117,31 @@ class RBM(nn.Module):
         """
         return F.relu(torch.sign(prob - random))
 
-    def hidden_from_visible(self, visible):
+    def hidden_from_visible(self, visible, beta = 1.0):
         # Enable or disable neurons depending on probabilities
         probability = torch.sigmoid(F.linear(visible, self.W, self.h_bias))
+        if beta is not None:
+            probability *= beta
         random_field = Variable(torch.rand(probability.size()))
         new_states = self.sample_probability(probability, random_field)
         return new_states, probability
 
-    def visible_from_hidden(self, hid):
+    def visible_from_hidden(self, hid, beta = 1.0):
         # Enable or disable neurons depending on probabilities
         probability = torch.sigmoid(F.linear(hid, self.W.t(), self.v_bias))
+        if beta is not None:
+            probability *= beta
         random_field = Variable(torch.rand(probability.size()))
         new_states = self.sample_probability(probability, random_field)
 
         return new_states, probability
 
-    def new_state(self, visible, use_prob=False):
+    def new_state(self, visible, use_prob=False, beta = 1.0):
         hidden, probhid = self.hidden_from_visible(visible)
         if (use_prob):
-            new_visible, probvis = self.visible_from_hidden(probhid)
+            new_visible, probvis = self.visible_from_hidden(probhid, beta)
         else:
-            new_visible, probvis = self.visible_from_hidden(hidden)
+            new_visible, probvis = self.visible_from_hidden(hidden, beta)
             
         # new_hidden, probhid_new = self.hidden_from_visible(probvis)
 
@@ -135,34 +184,110 @@ class RBM(nn.Module):
         # fill with -1s
         f_conf = open('probrbm', 'w')
         for conf in xrange(2**self.n_vis-1):
-            F = self.free_energy(Variable(field)).data.numpy()
+            F = self.free_energy_batch_mean(Variable(field)).data.numpy()
             p = exp(-F)/Z
             f_conf.write(str(conf)+" "+ str(p) + " " + str(Z) + " " + str(F)+"\n")
             #print(field)
             self.spin_flip(field) 
 
-        F = self.free_energy(Variable(field)).data.numpy()
+        F = self.free_energy_batch_mean(Variable(field)).data.numpy()
         p = exp(-F)/Z
         f_conf.write(str(conf+1)+" "+ str(p) + " " + str(Z) + " " + str(F)+"\n")
         f_conf.close()
 
     def partition_function(self):
         # Sum the exp free energy over all visible states configurations
+        # use only with an RMB with a limited number of states
         field = torch.zeros(1,self.n_vis)
         # fill with -1s
         Z = 0.0
         for conf in xrange(2**self.n_vis-1):
-            F = self.free_energy(Variable(field)).data.numpy()
+            F = self.free_energy_batch_mean(Variable(field)).data.numpy()
             Z += exp(-F)
             self.spin_flip(field) 
 
-        Z += exp(-self.free_energy(Variable(field)).data.numpy())
+        Z += exp(-self.free_energy_batch_mean(Variable(field)).data.numpy())
         return Z
 
-    def free_energy(self, v):
+    def annealed_importance_sampling(self, k = 1, betas = 10000, num_chains = 100):
+        """
+        Approximates the partition function for the given model using annealed importance sampling.
+
+            .. seealso:: Accurate and Conservative Estimates of MRF Log-likelihood using Reverse Annealing \
+               http://arxiv.org/pdf/1412.8566.pdf
+
+        :param num_chains: Number of AIS runs.
+        :type num_chains: int
+
+        :param k: Number of Gibbs sampling steps.
+        :type k: int
+
+        :param betas: Number or a list of inverse temperatures to sample from.
+        :type betas: int, numpy array [num_betas]
+        """
+        
+        # Set betas
+        if np.isscalar(betas):
+            betas = np.linspace(0.0, 1.0, betas)
+        
+        # Start with random distribution beta = 0
+        v = F.relu(torch.sign(torch.rand(num_chains,self.n_vis)-0.5))
+
+        # Calculate the unnormalized probabilties of v
+        # HERE: need another function that does not average across batches....
+        lnpvsum = -self.free_energy(v, betas[0])
+
+        for beta in betas[1:betas.shape[0] - 1]:
+            # Calculate the unnormalized probabilties of v
+            lnpvsum += self.free_energy(v, beta)
+
+           # Sample k times from the intermidate distribution
+            for _ in range(0, k):
+                h, ph, v, pv = self.new_state(v, beta)
+
+        # Calculate the unnormalized probabilties of v
+        lnpvsum -= self.free_energy(v, beta)
+
+        # Calculate the unnormalized probabilties of v
+        lnpvsum += self.free_energy(v, betas[betas.shape[0] - 1])
+
+        lnpvsum = np.float128(lnpvsum.data.numpy())
+        print("lnpvsum", lnpvsum)
+
+        # Calculate an estimate of logz . 
+        logz = log_sum_exp(lnpvsum) - np.log(num_chains)
+
+        # Calculate +/- 3 standard deviations
+        lnpvmean = np.mean(lnpvsum)
+        lnpvstd = np.log(np.std(np.exp(lnpvsum - lnpvmean))) + lnpvmean - np.log(num_chains) / 2.0
+        lnpvstd = np.vstack((np.log(3.0) + lnpvstd, logz))
+        print("lnpvstd", lnpvstd)
+        print("lnpvmean", lnpvmean)
+        print("logz", logz)
+
+        # Calculate partition function of base distribution
+        baselogz = self.log_partition_function_infinite_temperature()
+
+        # Add the base partition function
+        logz = logz + baselogz
+        #logz_up = log_sum_exp(lnpvstd) + baselogz
+        #logz_down = log_diff_exp(lnpvstd) + baselogz
+
+        return logz #, logz_up, logz_down
+
+
+
+
+
+    def log_partition_function_infinite_temperature(self):
+        # computes log ( p(v) ) for random states
+        return (self.n_vis + self.n_hid) * np.log(2.0)
+
+    def free_energy(self, v, beta=1.0):
         # computes log( p(v) )
         # eq 2.20 Asja Fischer
         # double precision
+        v *= beta
         vbias_term = v.mv(self.v_bias).double()  # = v*v_bias
         wx_b = F.linear(v, self.W, self.h_bias).double()  # = vW^T + h_bias
         
@@ -170,7 +295,10 @@ class RBM(nn.Module):
         hidden_term = wx_b.exp().add(1).log().sum(1)  
 
         # notice that for batches of data the result is still a vector of size num_batches
-        return -(hidden_term + vbias_term).mean()  # mean along the batches
+        return (hidden_term + vbias_term)  # mean along the batches
+
+    def free_energy_batch_mean(self, v, beta = 1.0):
+        return self.free_energy.mean()
 
     def backward(self, target, vk):
         # p(H_i | v) where v is the input data

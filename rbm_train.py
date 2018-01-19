@@ -140,8 +140,8 @@ for epoch in pbar:
         # the average on the training set of the gradients is
         # the sum of the derivative averaged over the training set minus the average on the model
         # still possible instabilities here, so I am computing the gradient myself
-        data_free_energy = rbm.free_energy(data_input)  # note: it does not include Z
-        loss = data_free_energy - rbm.free_energy(new_visible)
+        data_free_energy = rbm.free_energy_batch_mean(data_input)  # note: it does not include Z
+        loss = data_free_energy - rbm.free_energy_batch_mean(new_visible)
         loss_.append(loss.data[0])
         free_energy_.append(data_free_energy.data[0])
 
