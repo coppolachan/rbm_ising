@@ -66,13 +66,13 @@ def log_diff_exp(x, axis=0):
     :rtype: float or numpy array.
     """
     alpha = x.max(axis) - np.log(np.finfo(np.float64).max) / 2.0
-    print("alpha", alpha)
+    #print("alpha", alpha)
     if axis == 1:
         return np.squeeze(alpha + np.log(np.diff(np.exp(x.T - alpha), n=1, axis=0)))
     else:
-        print("x", x)
-        print("exp:", np.exp(x - alpha))
-        print("diff:", np.diff(np.exp(x - alpha)))
+        #print("x", x)
+        #print("exp:", np.exp(x - alpha))
+        #print("diff:", np.diff(np.exp(x - alpha)))
         return np.squeeze(alpha + np.log(np.diff(np.exp(x - alpha), n=1, axis=0)))
 
 
@@ -231,49 +231,53 @@ class RBM(nn.Module):
             betas = np.linspace(0.0, 1.0, betas)
         
         # Start with random distribution beta = 0
-        v = F.relu(torch.sign(torch.rand(num_chains,self.n_vis)-0.5))
+        #hzero = Variable(torch.zeros(num_chains, self.n_hid), volatile= True)
+        #v = self.visible_from_hidden(hzero, beta= betas[0]);
+
+        v = Variable(torch.sign(torch.rand(num_chains,self.n_vis)-0.5), volatile = True)  
+        v = F.relu(v)
 
         # Calculate the unnormalized probabilties of v
         # HERE: need another function that does not average across batches....
-        lnpvsum = -self.free_energy(v, betas[0])
+        lnpv_sum = -self.free_energy(v, betas[0])  #  denominator
 
         for beta in betas[1:betas.shape[0] - 1]:
             # Calculate the unnormalized probabilties of v
-            lnpvsum += self.free_energy(v, beta)
+            lnpv_sum += self.free_energy(v, beta)
 
            # Sample k times from the intermidate distribution
             for _ in range(0, k):
                 h, ph, v, pv = self.new_state(v, beta)
 
-        # Calculate the unnormalized probabilties of v
-        lnpvsum -= self.free_energy(v, beta)
+            # Calculate the unnormalized probabilties of v
+            lnpv_sum -= self.free_energy(v, beta)
 
         # Calculate the unnormalized probabilties of v
-        lnpvsum += self.free_energy(v, betas[betas.shape[0] - 1])
+        lnpv_sum += self.free_energy(v, betas[betas.shape[0] - 1])
 
-        lnpvsum = np.float128(lnpvsum.data.numpy())
-        print("lnpvsum", lnpvsum)
+        lnpv_sum = np.float128(lnpv_sum.data.numpy())
+        #print("lnpvsum", lnpv_sum)
 
         # Calculate an estimate of logz . 
-        logz = log_sum_exp(lnpvsum) - np.log(num_chains)
+        logz = log_sum_exp(lnpv_sum) - np.log(num_chains)
 
         # Calculate +/- 3 standard deviations
-        lnpvmean = np.mean(lnpvsum)
-        lnpvstd = np.log(np.std(np.exp(lnpvsum - lnpvmean))) + lnpvmean - np.log(num_chains) / 2.0
+        lnpvmean = np.mean(lnpv_sum)
+        lnpvstd = np.log(np.std(np.exp(lnpv_sum - lnpvmean))) + lnpvmean - np.log(num_chains) / 2.0
         lnpvstd = np.vstack((np.log(3.0) + lnpvstd, logz))
-        print("lnpvstd", lnpvstd)
-        print("lnpvmean", lnpvmean)
-        print("logz", logz)
+        #print("lnpvstd", lnpvstd)
+        #print("lnpvmean", lnpvmean)
+        #print("logz", logz)
 
         # Calculate partition function of base distribution
         baselogz = self.log_partition_function_infinite_temperature()
 
         # Add the base partition function
         logz = logz + baselogz
-        #logz_up = log_sum_exp(lnpvstd) + baselogz
-        #logz_down = log_diff_exp(lnpvstd) + baselogz
+        logz_up = log_sum_exp(lnpvstd) + baselogz
+        logz_down = log_diff_exp(lnpvstd) + baselogz
 
-        return logz #, logz_up, logz_down
+        return logz , logz_up, logz_down
 
 
 
@@ -287,7 +291,7 @@ class RBM(nn.Module):
         # computes log( p(v) )
         # eq 2.20 Asja Fischer
         # double precision
-        v *= beta
+        
         vbias_term = v.mv(self.v_bias).double()  # = v*v_bias
         wx_b = F.linear(v, self.W, self.h_bias).double()  # = vW^T + h_bias
         
@@ -295,7 +299,7 @@ class RBM(nn.Module):
         hidden_term = wx_b.exp().add(1).log().sum(1)  
 
         # notice that for batches of data the result is still a vector of size num_batches
-        return (hidden_term + vbias_term)  # mean along the batches
+        return (hidden_term + vbias_term)*beta  # mean along the batches
 
     def free_energy_batch_mean(self, v, beta = 1.0):
         return self.free_energy.mean()
