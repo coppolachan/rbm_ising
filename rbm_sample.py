@@ -102,9 +102,9 @@ def ising_averages(mag_history, model_size, label=""):
     susc_avg = susc_resample.mean(axis=0)
     susc_std = susc_resample.std(axis=0)
 
-    #finally take average across concurrent samples, can also compare to adding std in quadrature
+    #finally take average across concurrent samples, can also compare to adding std error in quad and divide by N_conc to account for taking mean
 
-    print(label, " ::: Magnetization: ", mag_avg.mean(), " +- ", mag_avg.std()/sqrt(len(mag_avg)), "compare to std error added in quad +- ", sqrt(sum(mag_std**2/resample_size)), " - Susceptibility:", susc_avg.mean() , " +- ", susc_avg.std()/sqrt(len(mag_avg)), "compare to std error added in quad +- ", sqrt(sum(susc_std**2/resample_size)))
+    print(label, " ::: Magnetization: ", mag_avg.mean(), " +- ", mag_avg.std()/sqrt(len(mag_avg)), "compare to std error added in quad +- ", sqrt(sum(mag_std**2/(resample_size*len(mag_avg)))), " - Susceptibility:", susc_avg.mean() , " +- ", susc_avg.std()/sqrt(len(mag_avg)), "compare to std error added in quad +- ", sqrt(sum(susc_std**2/(resample_size*len(mag_avg)))))
     #plt.plot(mag_history[:,0], linewidth=0.2)
     #plt.show()
 
