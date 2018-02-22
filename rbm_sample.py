@@ -126,7 +126,8 @@ def sample_probability(prob, random):
         :return: binary sample of probabilities
     """
     torchReLu = nn.ReLU()
-    return torchReLu(torch.sign(prob - random)).data
+    #Didn't work for Tomasso and I without adding in Variable()
+    return torchReLu(Variable(torch.sign(prob - random))).data
 
 
 def hidden_from_visible(visible, W, h_bias):
