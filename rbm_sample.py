@@ -294,8 +294,8 @@ ising_averages(magh, model_size, "h")
 logz, logz_up, logz_down = rbm.annealed_importance_sampling(k=1, betas = 10000, num_chains = 200)
 print("LogZ ", logz, logz_up, logz_down)
 
-# Save data
-np.savetxt("Mag_history", magv)
+# Save data - in img directory
+np.savetxt(parameters['image_dir'] + "Mag_history", magv)
 
 
 
