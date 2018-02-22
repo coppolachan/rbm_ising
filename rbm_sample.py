@@ -89,15 +89,15 @@ def ising_averages(mag_history, model_size, label=""):
     # Bootstrap samples
     resample_size = 50000
     #get resample states
-    mag_resample = bootstrap_resample(mag_history[:,0], n=resample_size)
+    mag_resample = bootstrap_resample(mag_history[:, 0, :], n=resample_size)
     
     #Now take average across resampled states and std dev.
     mag_avg = mag_resample.mean(axis=0)
     mag_std = mag_resample.std(axis=0)
 
-    #now take mag_history[:, :, 0] (all states, for all conc samples, m) and find susc, then
+    #now take mag_history[:, 0, :] (all states, m ,for all conc samples) and find susc, then
     #input the susc to bootstrap to return n_resample * n_conc array of susceptibility
-    mag_err = model_size*((mag_history[:, :, 0]-mag_history[:, :, 0].mean(axis=0))**2)
+    mag_err = model_size*((mag_history[:, 0, :]-mag_history[:, 0, :].mean(axis=0))**2)
     susc_resample = bootstrap_resample(mag_err, n=resample_size)
     #take average across resampled states and std dev.
     susc_avg = susc_resample.mean(axis=0)
@@ -298,8 +298,8 @@ print("LogZ ", logz, logz_up, logz_down)
 
 # Save data - in img directory
 #since mag history will be N_gibbssample * N_concurrent * 2 we should output mag history for each concurrent sample
-for i in range(len(magv[0, :, 0])):
-    np.savetxt(parameters['image_dir'] + "Mag_history_sample_" + str(i), magv[:, i, :])
+for i in range(len(magv[0, 0, :])):
+    np.savetxt(parameters['image_dir'] + "Mag_history_sample_" + str(i), magv[:, :, i])
 
 
 
