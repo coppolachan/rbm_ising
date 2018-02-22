@@ -190,9 +190,10 @@ def sample_from_rbm(steps, model, image_size, nstates=30, v_in=None):
             if parameters['output_states']:
                 imgshow(parameters['image_dir'] + "dream" + str(s),
                         make_grid(v.view(-1, 1, image_size, image_size)))
-            else:
-                imgshow(parameters['image_dir'] + "dream" + str(s),
-                        make_grid(v_prob.view(-1, 1, image_size, image_size)))
+        #don't think states should be outputted at all if output_states is false
+        #    else:
+        #        imgshow(parameters['image_dir'] + "dream" + str(s),
+        #                make_grid(v_prob.view(-1, 1, image_size, image_size)))
             if args.verbose:
                 print(s, "OK")
 
