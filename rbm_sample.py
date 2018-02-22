@@ -81,24 +81,31 @@ def get_ising_variables(field, sign=-1):
 
 
 def ising_magnetization(field):
-    m = np.abs((field).mean())
+    #axis=1 to return the average field for each state dimension N_concsamp x 1 
+    m = np.abs((field).mean(axis=1))
     return np.array([m, m * m])
 
 def ising_averages(mag_history, model_size, label=""):
     # Bootstrap samples
     resample_size = 50000
+    #get resample states
     mag_resample = bootstrap_resample(mag_history[:,0], n=resample_size)
-    #print('original mean:', mag_history[:,0].mean() )
-    #print('resampled mean:', mag_resample.mean() )
-    #print('resampled error:', mag_resample.std()/sqrt(resample_size) )
+    
+    #Now take average across resampled states and std dev.
+    mag_avg = mag_resample.mean(axis=0)
+    mag_std = mag_resample.std(axis=0)
 
-    mag_err = model_size*((mag_history[:,0]-mag_history[:,0].mean())**2)
+    #now take mag_history[:, :, 0] (all states, for all conc samples, m) and find susc, then
+    #input the susc to bootstrap to return n_resample * n_conc array of susceptibility
+    mag_err = model_size*((mag_history[:, :, 0]-mag_history[:, :, 0].mean(axis=0))**2)
     susc_resample = bootstrap_resample(mag_err, n=resample_size)
-    #print('original susc mean:', mag_err.mean() )
-    #print('resampled susc mean:', susc_resample.mean() )
-    #print('resampled susc error:', susc_resample.std()/sqrt(resample_size) )
+    #take average across resampled states and std dev.
+    susc_avg = susc_resample.mean(axis=0)
+    susc_std = sesc_resample.std(axis=0)
 
-    print(label, " ::: Magnetization: ", mag_resample.mean(), " +- ", mag_resample.std()/sqrt(resample_size), " - Susceptibility:", susc_resample.mean() , " +- ", susc_resample.std()/sqrt(resample_size))
+    #finally take average across concurrent samples, can also compare to adding std in quadrature
+
+    print(label, " ::: Magnetization: ", mag_avg.mean(), " +- ", mag_avg.std()/sqrt(len(mag_avg)), "compare to std error added in quad +- ", sqrt(sum(mag_std**2/resample_size)), " - Susceptibility:", susc_avg.mean() , " +- ", susc_avg.std()/sqrt(len(mag_avg)), "compare to std error added in quad +- ", sqrt(sum(susc_std**2/resample_size)))
     #plt.plot(mag_history[:,0], linewidth=0.2)
     #plt.show()
 
