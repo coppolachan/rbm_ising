@@ -95,8 +95,7 @@ def ising_averages(mag_history, model_size, label=""):
     mag_avg = mag_resample.mean(axis=0)
     mag_std = mag_resample.std(axis=0)
 
-    #now take mag_history[:, 0, :] (all states, m ,for all conc samples) and find susc, then
-    #input the susc to bootstrap to return n_resample * n_conc array of susceptibility
+    #now take mag_history[:, 0, :] (all states, m ,for all conc samples) and find susc, then input the susc to bootstrap to return n_resample * n_conc array of susceptibility
     mag_err = model_size*((mag_history[:, 0, :]-mag_history[:, 0, :].mean(axis=0))**2)
     susc_resample = bootstrap_resample(mag_err, n=resample_size)
     #take average across resampled states and std dev.
