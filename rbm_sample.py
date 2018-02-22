@@ -101,7 +101,7 @@ def ising_averages(mag_history, model_size, label=""):
     susc_resample = bootstrap_resample(mag_err, n=resample_size)
     #take average across resampled states and std dev.
     susc_avg = susc_resample.mean(axis=0)
-    susc_std = sesc_resample.std(axis=0)
+    susc_std = susc_resample.std(axis=0)
 
     #finally take average across concurrent samples, can also compare to adding std in quadrature
 
