@@ -298,7 +298,7 @@ print("LogZ ", logz, logz_up, logz_down)
 
 # Save data - in img directory
 #since mag history will be N_gibbssample * N_concurrent * 2 we should output mag history for each concurrent sample
-for i in range(len(magv[0, :, 0]))
+for i in range(len(magv[0, :, 0])):
     np.savetxt(parameters['image_dir'] + "Mag_history_sample_" + str(i), magv[:, i, :])
 
 
