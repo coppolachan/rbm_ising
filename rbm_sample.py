@@ -289,11 +289,11 @@ else:
 
 
 # Print statistics
-#ising_averages(magv, model_size, "v")
-#ising_averages(magh, model_size, "h")
+ising_averages(magv, model_size, "v")
+ising_averages(magh, model_size, "h")
 
-#logz, logz_up, logz_down = rbm.annealed_importance_sampling(k=1, betas = 10000, num_chains = 200)
-#print("LogZ ", logz, logz_up, logz_down)
+logz, logz_up, logz_down = rbm.annealed_importance_sampling(k=1, betas = 10000, num_chains = 200)
+print("LogZ ", logz, logz_up, logz_down)
 
 # Save data - in img directory
 #since mag history will be N_gibbssample * N_concurrent * 2 we should output mag history for each concurrent sample
