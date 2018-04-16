@@ -205,7 +205,7 @@ def sample_from_rbm(steps, model, image_size, nstates=30, v_in=None):
         
         
             # Save data
-        if (s > parameters['thermalization']):
+        if (s > parameters['thermalization']) and (s % parameters['save interval'] == 0):
             magv.append(ising_magnetization(get_ising_variables(v.numpy())))
             magh.append(ising_magnetization(get_ising_variables(h.numpy())))
     return v, np.asarray(magv), np.asarray(magh)
