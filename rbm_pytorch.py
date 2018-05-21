@@ -79,10 +79,10 @@ def log_diff_exp(x, axis=0):
 
 class CSV_Ising_dataset(Dataset):
     """ Defines a CSV reader """
-    def __init__(self, csv_file, size=32, transform=None):
+    def __init__(self, csv_file, size=32, transform=None, skiprows=1):
         self.csv_file = csv_file
         self.size = size
-        csvdata = np.loadtxt(csv_file, delimiter=",", skiprows=1, dtype="float32")
+        csvdata = np.loadtxt(csv_file, delimiter=",", skiprows=skiprows, dtype="float32")
         self.imgs = torch.from_numpy(csvdata.reshape(-1, size))
         self.datasize, sizesq = self.imgs.shape
         self.transform = transform
@@ -119,18 +119,20 @@ class RBM(nn.Module):
 
     def hidden_from_visible(self, visible, beta = 1.0):
         # Enable or disable neurons depending on probabilities
-        probability = torch.sigmoid(F.linear(visible, self.W, self.h_bias))
+        activation = F.linear(visible, self.W, self.h_bias)
         if beta is not None:
-            probability *= beta
+            activation *= beta
+        probability = torch.sigmoid(activation)
         random_field = Variable(torch.rand(probability.size()))
         new_states = self.sample_probability(probability, random_field)
         return new_states, probability
 
     def visible_from_hidden(self, hid, beta = 1.0):
         # Enable or disable neurons depending on probabilities
-        probability = torch.sigmoid(F.linear(hid, self.W.t(), self.v_bias))
+        activation = F.linear(hid, self.W.t(), self.v_bias)
         if beta is not None:
-            probability *= beta
+            activation *= beta
+        probability = torch.sigmoid(activation)
         random_field = Variable(torch.rand(probability.size()))
         new_states = self.sample_probability(probability, random_field)
 
@@ -285,7 +287,7 @@ class RBM(nn.Module):
 
     def log_partition_function_infinite_temperature(self):
         # computes log ( p(v) ) for random states
-        return (self.n_vis + self.n_hid) * np.log(2.0)
+        return (self.n_vis) * np.log(2.0)
 
     def free_energy(self, v, beta=1.0):
         # computes log( p(v) )
