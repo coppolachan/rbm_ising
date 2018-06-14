@@ -86,7 +86,7 @@ class CSV_Ising_dataset(Dataset):
         self.imgs = torch.from_numpy(csvdata.reshape(-1, size))
         self.datasize, sizesq = self.imgs.shape
         self.transform = transform
-        print("Loaded training set of %d states" % self.datasize)
+        print("# Loaded training set of %d states" % self.datasize)
 
     def __getitem__(self, index):
         return self.imgs[index], index
@@ -304,7 +304,7 @@ class RBM(nn.Module):
         return (hidden_term + vbias_term)*beta  # mean along the batches
 
     def free_energy_batch_mean(self, v, beta = 1.0):
-        return self.free_energy.mean()
+        return self.free_energy(v,beta).mean()
 
     def backward(self, target, vk):
         # p(H_i | v) where v is the input data
