@@ -13,17 +13,15 @@
 from __future__ import print_function
 
 import numpy as np
-import matplotlib.pyplot as plt
-
 from tqdm import *
-
 import argparse
+
 import torch
 import torch.utils.data
-#import torchvision
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+
 from torch.autograd import Variable
 from torch.utils.data import Dataset
 
@@ -70,9 +68,6 @@ def log_diff_exp(x, axis=0):
     if axis == 1:
         return np.squeeze(alpha + np.log(np.diff(np.exp(x.T - alpha), n=1, axis=0)))
     else:
-        #print("x", x)
-        #print("exp:", np.exp(x - alpha))
-        #print("diff:", np.diff(np.exp(x - alpha)))
         return np.squeeze(alpha + np.log(np.diff(np.exp(x - alpha), n=1, axis=0)))
 
 
@@ -165,8 +160,6 @@ class RBM(nn.Module):
         
         return vis, hidden, h_prob, v_prob
 
-
-
     def loss(self, ref, test):
         return F.mse_loss(test, ref, size_average=True)
 
@@ -215,7 +208,7 @@ class RBM(nn.Module):
         """
         Approximates the partition function for the given model using annealed importance sampling.
 
-            .. seealso:: Accurate and Conservative Estimates of MRF Log-likelihood using Reverse Annealing \
+            .. see also:: Accurate and Conservative Estimates of MRF Log-likelihood using Reverse Annealing \
                http://arxiv.org/pdf/1412.8566.pdf
 
         :param num_chains: Number of AIS runs.
@@ -233,11 +226,8 @@ class RBM(nn.Module):
             betas = np.linspace(0.0, 1.0, betas)
         
         # Start with random distribution beta = 0
-        #hzero = Variable(torch.zeros(num_chains, self.n_hid), volatile= True)
-        #v = self.visible_from_hidden(hzero, beta= betas[0]);
-
         v = Variable(torch.sign(torch.rand(num_chains,self.n_vis)-0.5), volatile = True)  
-        v = F.relu(v)
+        v = F.relu(v) # v in {0,1} and distributed randomly
 
         # Calculate the unnormalized probabilties of v
         # HERE: need another function that does not average across batches....
@@ -281,10 +271,6 @@ class RBM(nn.Module):
 
         return logz , logz_up, logz_down
 
-
-
-
-
     def log_partition_function_infinite_temperature(self):
         # computes log ( p(v) ) for random states
         return (self.n_vis) * np.log(2.0)
@@ -306,6 +292,9 @@ class RBM(nn.Module):
     def free_energy_batch_mean(self, v, beta = 1.0):
         return self.free_energy(v,beta).mean()
 
+    def free_energy_batch_sum(self, v, beta = 1.0):
+        return self.free_energy(v,beta).sum()
+
     def backward(self, target, vk):
         # p(H_i | v) where v is the input data
         probability = torch.sigmoid(F.linear(target, self.W, self.h_bias))
@@ -318,12 +307,9 @@ class RBM(nn.Module):
         # see http://www.cs.toronto.edu/~hinton/absps/momentum.pdf
         # the learning rate has a negative sign in front
         self.W.grad = -(training_set_avg - h_prob_negative.t().mm(vk)) / probability.size(0)
-        #print(self.W.grad)
 
         # Update the v_bias
         self.v_bias.grad = -(target - vk).mean(0)
-        #print("vbias", self.v_bias)
 
         # Update the h_bias
         self.h_bias.grad = -(probability - h_prob_negative).mean(0)
-        #print("hbias grad", self.h_bias.grad)
