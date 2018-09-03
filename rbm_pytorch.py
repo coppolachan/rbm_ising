@@ -239,7 +239,7 @@ class RBM(nn.Module):
 
            # Sample k times from the intermidate distribution
             for _ in range(0, k):
-                h, ph, v, pv = self.new_state(v, beta)
+                h, ph, v, pv = self.new_state(v, beta=beta)
 
             # Calculate the unnormalized probabilties of v
             lnpv_sum -= self.free_energy(v, beta)
